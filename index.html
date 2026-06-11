@@ -263,7 +263,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   <div id="drawer">
     <div class="drawer-header">
       <div class="drawer-app-name">Prospect Scout</div>
-      <div class="drawer-version">v3.0</div>
+      <div class="drawer-version">v4.0</div>
     </div>
     <div class="drawer-nav">
       <div class="nav-item active" id="nav-map" onclick="showMap()">
@@ -367,8 +367,8 @@ const TYPE_GROUPS = [
   ['hair_salon','beauty_salon','barber_shop','nail_salon',
    'spa','massage','yoga_studio','gym','cosmetics_store'],
 
-  // 4 · Salud
-  ['doctor','physiotherapist','dentist','pharmacy','veterinary_care'],
+  // 4 · Salud (pharmacy removed)
+  ['doctor','physiotherapist','dentist','veterinary_care'],
 
   // 5 · Moda, regalo & comercio especializado
   ['clothing_store','shoe_store','jewelry_store','tailor',
@@ -388,6 +388,18 @@ const TYPE_GROUPS = [
 ];
 
 const MIN_REVIEWS = 5;
+
+const TEXT_QUERIES = [
+  'reformas hogar','empresa reformas',
+  'interiorismo','diseño de interiores',
+  'arquitecto','estudio de arquitectura',
+  'electricista','fontanería',
+  'osteopatía','osteopata',
+  'fisioterapia',
+  'autoescuela',
+  'academia de idiomas','clases de idiomas',
+  'yoga','pilates',
+];
 
 // ═══════════════════════════════════════
 // STATE
@@ -520,12 +532,12 @@ async function doSearch() {
     leafMarkers={}; prospects={};
     currentDistrict = q.toLowerCase().trim();
 
-    // 4. Grid × type-group search
-    const total = cells.length * TYPE_GROUPS.length;
+    // 4. Phase 1: Grid × type-group search
+    const totalCalls = cells.length * TYPE_GROUPS.length + TEXT_QUERIES.length;
     let done=0, newCount=0, apiErr='';
     const seen = new Set();
 
-    showLoad(`Consultando Google Places…`,`0 / ${total} búsquedas`);
+    showLoad(`Consultando Google Places…`,`0 / ${totalCalls} búsquedas`);
 
     for (const cell of cells) {
       for (const types of TYPE_GROUPS) {
@@ -540,24 +552,40 @@ async function doSearch() {
           });
         } catch(e){
           apiErr = e.message;
-          console.warn('Search error', e.message);
           if (e.message.includes('API Key') || e.message.includes('403') || e.message.includes('401')) {
             hideLoad(); setStatus('❌ ' + e.message, 'err'); return;
           }
         }
         done++;
-        showLoad(`Buscando negocios… (aparecen en el mapa)`,`${done} / ${total} búsquedas · ${newCount} encontrados`);
+        showLoad(`Buscando negocios…`,`${done} / ${totalCalls} · ${newCount} encontrados`);
       }
+    }
+
+    // 5. Phase 2: keyword text searches across full district
+    const distBounds = boundaryLayer ? boundaryLayer.getBounds() : nominatimBounds;
+    const sw = distBounds.getSouthWest(), ne = distBounds.getNorthEast();
+    for (const query of TEXT_QUERIES) {
+      try {
+        const places = await textSearchAll(sw, ne, query);
+        places.forEach(p=>{
+          if (seen.has(p.id)) return;
+          seen.add(p.id);
+          prospects[p.id]={...p, status:'new', details:null};
+          placeMarker(prospects[p.id]);
+          newCount++;
+        });
+      } catch(e){ console.warn('Text search:', query, e.message); }
+      done++;
+      showLoad(`Buscando: "${query}"`,`${done} / ${totalCalls} · ${newCount} encontrados`);
     }
 
     hideLoad();
     if (newCount === 0 && apiErr) {
       setStatus('Error Places API: ' + apiErr, 'err');
     } else {
-      const total = Object.keys(prospects).length;
       const noWeb = Object.values(prospects).filter(p=>!p.websiteUri||isProspect(p.websiteUri)).length;
       saveToArchive();
-      setStatus(`${total} negocios · ${noWeb} sin web propia`, 'ok');
+      setStatus(`${Object.keys(prospects).length} negocios · ${noWeb} sin web propia`, 'ok');
     }
 
   } catch(err) {
@@ -700,6 +728,30 @@ function isProspect(websiteUri) {
   if (!websiteUri) return true;
   const u = websiteUri.toLowerCase();
   return NO_WEBSITE_DOMAINS.some(d => u.includes(d));
+}
+
+async function textSearchAll(sw, ne, query){
+  const r=await timedFetch('https://places.googleapis.com/v1/places:searchText',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Goog-Api-Key':apiKey,
+      'X-Goog-FieldMask':'places.id,places.displayName,places.rating,places.userRatingCount,places.location,places.primaryTypeDisplayName,places.types,places.websiteUri'},
+    body:JSON.stringify({
+      textQuery:query,maxResultCount:20,languageCode:'es',
+      locationRestriction:{rectangle:{
+        low:{latitude:sw.lat,longitude:sw.lng},
+        high:{latitude:ne.lat,longitude:ne.lng}
+      }}
+    })
+  },25000);
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||'Text search '+r.status);}
+  const d=await r.json();
+  return(d.places||[]).filter(p=>(p.userRatingCount||0)>=MIN_REVIEWS).map(p=>({
+    id:p.id,name:p.displayName?.text||'(sin nombre)',
+    rating:p.rating??null,reviews:p.userRatingCount??0,
+    lat:p.location?.latitude,lon:p.location?.longitude,
+    typeDisplay:p.primaryTypeDisplayName?.text||query,
+    websiteUri:p.websiteUri||null,
+  }));
 }
 
 async function fetchDetails(id){
