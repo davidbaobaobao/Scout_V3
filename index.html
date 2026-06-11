@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Prospect Scout</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --red:#E53935; --green:#43A047; --grey:#9E9E9E;
+  --blue:#1a73e8; --bg:#f5f5f5; --card:#fff;
+  --text:#111; --muted:#777; --border:#e8e8e8;
+  --safe-top: env(safe-area-inset-top,0px);
+  --safe-bottom: env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;background:var(--bg)}
+
+/* ── SETUP ── */
+#setup{position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem}
+.setup-icon{font-size:56px;margin-bottom:14px}
+.setup-title{font-size:28px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.setup-sub{font-size:14px;color:var(--muted);text-align:center;line-height:1.7;margin-bottom:28px;max-width:300px}
+.setup-input{width:100%;max-width:340px;padding:14px 16px;border:1.5px solid var(--border);border-radius:14px;font-size:15px;color:var(--text);background:#fafafa;margin-bottom:12px;-webkit-appearance:none}
+.setup-input:focus{outline:none;border-color:var(--blue)}
+.setup-btn{width:100%;max-width:340px;padding:15px;background:var(--blue);color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer}
+.setup-hint{font-size:12px;color:#aaa;margin-top:18px;text-align:center;line-height:1.8}
+.setup-hint a{color:var(--blue);text-decoration:none}
+
+/* ── APP SHELL ── */
+#app{position:fixed;inset:0;display:none;flex-direction:column}
+
+/* ── TOPBAR ── */
+#topbar{
+  position:relative;z-index:400;
+  background:#fff;border-bottom:1px solid var(--border);
+  padding:10px 12px 8px;
+  padding-top:max(10px,var(--safe-top));
+  box-shadow:0 2px 10px rgba(0,0,0,.08);
+}
+.tb-row{display:flex;gap:8px;align-items:center}
+#search-input{
+  flex:1;padding:10px 14px;border:1.5px solid var(--border);
+  border-radius:12px;font-size:15px;background:#f8f8f8;
+  color:var(--text);-webkit-appearance:none
+}
+#search-input:focus{outline:none;border-color:var(--blue);background:#fff}
+.tb-btn{
+  padding:10px 16px;border-radius:12px;border:none;
+  background:var(--blue);color:#fff;font-size:14px;
+  font-weight:700;cursor:pointer;white-space:nowrap
+}
+.tb-btn:active{background:#1557b0}
+.ham-btn{
+  width:40px;height:40px;border-radius:12px;border:1.5px solid var(--border);
+  background:#fff;font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)
+}
+#statusline{font-size:11px;color:var(--muted);min-height:14px;padding:0 2px;align-self:center}
+.filter-btn{
+  padding:5px 10px;border-radius:8px;border:1.5px solid var(--border);
+  background:#fff;font-size:12px;font-weight:600;cursor:pointer;
+  color:var(--muted);white-space:nowrap;flex-shrink:0;
+}
+.filter-btn.active{background:#FFEBEE;border-color:#E53935;color:#C62828}
+#statusline.ok{color:var(--green)}
+#statusline.err{color:var(--red)}
+#statusline.info{color:var(--blue)}
+
+/* ── MAP ── */
+#map{flex:1;z-index:1}
+
+/* ── SIDE DRAWER ── */
+#drawer-overlay{position:fixed;inset:0;z-index:700;display:none}
+#drawer-overlay.open{display:block}
+#drawer-bg{position:absolute;inset:0;background:rgba(0,0,0,.35)}
+#drawer{
+  position:absolute;top:0;left:0;bottom:0;width:260px;
+  background:#fff;display:flex;flex-direction:column;
+  box-shadow:4px 0 24px rgba(0,0,0,.18);
+  transform:translateX(-100%);transition:transform .28s cubic-bezier(.32,0,.32,1);
+  padding-top:var(--safe-top);
+}
+#drawer-overlay.open #drawer{transform:translateX(0)}
+.drawer-header{padding:20px 20px 14px;border-bottom:1px solid var(--border)}
+.drawer-app-name{font-size:18px;font-weight:700;color:var(--text)}
+.drawer-version{font-size:11px;color:var(--muted);margin-top:2px}
+.drawer-nav{flex:1;overflow-y:auto;padding:8px 0}
+.nav-item{
+  display:flex;align-items:center;gap:14px;
+  padding:15px 20px;font-size:15px;color:var(--text);
+  cursor:pointer;border-left:3px solid transparent;
+  transition:background .15s;
+}
+.nav-item:active{background:#f5f5f5}
+.nav-item.active{border-left-color:var(--blue);background:#e8f0fe;color:var(--blue);font-weight:600}
+.nav-icon{font-size:20px;width:24px;text-align:center}
+.drawer-footer{padding:16px 20px;border-top:1px solid var(--border)}
+.drawer-key-btn{font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline}
+
+/* ── OVERLAYS SHARED ── */
+.overlay-panel{
+  position:fixed;inset:0;z-index:300;
+  background:rgba(245,245,245,.97);
+  display:none;flex-direction:column;
+  padding:0 16px 24px;
+  padding-top:calc(var(--safe-top) + 70px);
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+}
+.overlay-panel.open{display:flex}
+
+/* ── STATS PANEL ── */
+#stats-overlay{}
+.stats-title{font-size:22px;font-weight:700;color:var(--text);margin-bottom:20px}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px}
+.stat-card{
+  background:#fff;border-radius:16px;padding:18px 16px;
+  box-shadow:0 2px 8px rgba(0,0,0,.06);
+}
+.stat-label{font-size:12px;color:var(--muted);font-weight:500;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.stat-value{font-size:32px;font-weight:700;color:var(--text)}
+.stat-value.red{color:var(--red)}
+.stat-value.green{color:var(--green)}
+.stat-value.grey{color:var(--grey)}
+.stat-bar-wrap{background:#fff;border-radius:16px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:12px}
+.stat-bar-label{font-size:13px;color:var(--muted);margin-bottom:8px}
+.stat-bar-track{height:10px;background:#f0f0f0;border-radius:5px;overflow:hidden;margin-bottom:4px}
+.stat-bar-fill{height:100%;border-radius:5px;transition:width .5s}
+.stat-bar-pct{font-size:12px;color:var(--muted);text-align:right}
+/* ── DISTRICTS PANEL ── */
+.district-card{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.06);border:1.5px solid var(--border)}
+.district-card.active-district{border-color:var(--blue);background:#f0f6ff}
+.dc-name{font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px}
+.dc-meta{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6}
+.dc-actions{display:flex;gap:8px}
+.dc-btn{flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--border);background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:var(--text)}
+.dc-btn.load{background:var(--blue);color:#fff;border-color:var(--blue)}
+.dc-btn.del{color:var(--red);border-color:#ffcdd2}
+.no-districts{text-align:center;color:var(--muted);font-size:14px;padding:40px 0}
+.back-btn{
+  align-self:flex-start;margin-bottom:12px;
+  padding:8px 14px;border-radius:10px;border:1.5px solid var(--border);
+  background:#fff;font-size:14px;font-weight:600;cursor:pointer;color:var(--blue);
+}
+
+.save-load-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.sl-btn{
+  padding:14px;border-radius:14px;border:1.5px solid var(--border);
+  background:#fff;font-size:14px;font-weight:600;cursor:pointer;color:var(--text);
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+.sl-btn .sl-ico{font-size:24px}
+.sl-btn:active{background:#f5f5f5}
+.sl-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.sl-btn.primary:active{background:#1557b0}
+
+/* ── BOTTOM PANEL ── */
+#panel{
+  position:fixed;left:0;right:0;bottom:0;z-index:500;
+  background:#fff;border-radius:22px 22px 0 0;
+  box-shadow:0 -6px 28px rgba(0,0,0,.14);
+  transform:translateY(110%);
+  transition:transform .3s cubic-bezier(.32,0,.32,1);
+  max-height:78vh;display:flex;flex-direction:column;
+  padding-bottom:max(20px,var(--safe-bottom));
+}
+#panel.open{transform:translateY(0)}
+.p-handle{width:44px;height:5px;background:#e0e0e0;border-radius:3px;margin:12px auto 4px;flex-shrink:0;cursor:pointer}
+#panel-body{overflow-y:auto;flex:1;padding:8px 20px 8px;-webkit-overflow-scrolling:touch}
+.p-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
+.p-name{font-size:20px;font-weight:700;color:var(--text);line-height:1.25;flex:1}
+.p-status-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.p-type{font-size:13px;color:var(--muted);margin-bottom:10px}
+.p-rating{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.p-stars{color:#F9A825;font-size:14px}
+.p-rnum{font-size:17px;font-weight:700;color:var(--text)}
+.p-rcount{font-size:13px;color:var(--muted)}
+.p-info-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;font-size:14px;color:#444}
+.p-info-ico{font-size:16px;flex-shrink:0;line-height:1.4}
+.p-info-row a{color:var(--blue);text-decoration:none;word-break:break-all}
+.no-web{color:var(--red)}
+.p-divider{height:1px;background:var(--border);margin:14px 0}
+.gmaps-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:13px;background:var(--blue);color:#fff;
+  border:none;border-radius:14px;font-size:15px;font-weight:700;
+  cursor:pointer;text-decoration:none;margin-bottom:14px
+}
+.gmaps-btn:active{background:#1557b0}
+.action-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.a-btn{
+  padding:14px 8px;border-radius:14px;border:2px solid;
+  font-size:14px;font-weight:700;cursor:pointer;background:transparent;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  -webkit-appearance:none;transition:all .15s;
+}
+.a-btn .a-ico{font-size:22px}
+.a-btn.green{border-color:var(--green);color:var(--green)}
+.a-btn.grey{border-color:var(--grey);color:var(--grey)}
+.a-btn.green.active{background:var(--green);color:#fff}
+.a-btn.grey.active{background:var(--grey);color:#fff}
+.p-loading{text-align:center;color:#ccc;font-size:13px;padding:24px 0}
+
+/* ── MARKERS ── */
+.pm{position:absolute;transform:translate(-6px,-6px);display:flex;align-items:center;gap:3px;cursor:pointer;pointer-events:auto}
+.pm-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 6px rgba(0,0,0,.55)}
+.pm-lbl{background:rgba(255,255,255,.93);border:0.5px solid rgba(0,0,0,.12);border-radius:6px;padding:2px 7px;font-size:11px;font-weight:500;color:#111;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+/* hide labels below zoom 15 to reduce clutter */
+#map.labels-hidden .pm-lbl{display:none}
+
+/* ── LEGEND ── */
+#legend{position:fixed;bottom:calc(max(16px,var(--safe-bottom)) + 4px);left:12px;z-index:400;background:rgba(255,255,255,.94);border-radius:10px;padding:7px 10px;box-shadow:0 2px 8px rgba(0,0,0,.14);font-size:11px;line-height:1.9;pointer-events:none}
+.leg-row{display:flex;align-items:center;gap:7px}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(255,255,255,.8);box-shadow:0 1px 3px rgba(0,0,0,.35)}
+
+/* ── GPS ── */
+.gps-outer{width:20px;height:20px;display:flex;align-items:center;justify-content:center;position:relative}
+.gps-ring{position:absolute;inset:-4px;border-radius:50%;background:rgba(26,115,232,.15);animation:gps-pulse 2s ease-in-out infinite}
+.gps-core{width:12px;height:12px;border-radius:50%;background:var(--blue);border:2.5px solid #fff;box-shadow:0 0 0 2.5px rgba(26,115,232,.35);position:relative;z-index:1}
+@keyframes gps-pulse{0%,100%{transform:scale(.7);opacity:.6}50%{transform:scale(1.4);opacity:.2}}
+
+/* ── LOADING ── */
+#loading{position:fixed;inset:0;z-index:2000;background:rgba(255,255,255,.8);backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#loading.show{display:flex}
+.spin{width:38px;height:38px;border-radius:50%;border:3px solid #e8e8e8;border-top-color:var(--blue);animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#load-msg{font-size:14px;font-weight:500;color:#555}
+#load-sub{font-size:12px;color:#aaa}
+</style>
+</head>
+<body>
+
+<!-- ══ APP ══ -->
+<div id="app">
+  <div id="topbar">
+    <div class="tb-row">
+      <button class="ham-btn" onclick="openDrawer()">☰</button>
+      <input type="text" id="search-input" placeholder="Zona a buscar (ej: Gràcia, Barcelona)"
+        autocorrect="off" onkeydown="if(event.key==='Enter')doSearch()">
+      <button class="tb-btn" onclick="doSearch()">Buscar</button>
+    </div>
+    <div class="tb-row" style="margin-top:6px;gap:6px">
+      <button class="filter-btn" id="filter-btn" onclick="toggleFilter()">🔴 Solo sin web</button>
+      <div id="statusline" style="flex:1"></div>
+    </div>
+  </div>
+  <div id="map"></div>
+  <div id="legend">
+    <div class="leg-row"><div class="leg-dot" style="background:#E53935"></div>Sin web</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#FFC107"></div>Solo redes/reservas</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#43A047"></div>Guardado</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#9E9E9E"></div>Descartado</div>
+  </div>
+</div>
+
+<!-- ══ DRAWER ══ -->
+<div id="drawer-overlay">
+  <div id="drawer-bg" onclick="closeDrawer()"></div>
+  <div id="drawer">
+    <div class="drawer-header">
+      <div class="drawer-app-name">Prospect Scout</div>
+      <div class="drawer-version">v3.0</div>
+    </div>
+    <div class="drawer-nav">
+      <div class="nav-item active" id="nav-map" onclick="showMap()">
+        <span class="nav-icon">🗺️</span> Mapa
+      </div>
+      <div class="nav-item" id="nav-districts" onclick="showDistricts()">
+        <span class="nav-icon">📁</span> Mis distritos
+      </div>
+      <div class="nav-item" id="nav-stats" onclick="showStats()">
+        <span class="nav-icon">📊</span> Estadísticas
+      </div>
+      <div style="height:1px;background:var(--border);margin:8px 0"></div>
+      <div class="nav-item" onclick="exportExcel()">
+        <span class="nav-icon">📤</span> Exportar Excel
+      </div>
+      <div style="height:1px;background:var(--border);margin:8px 0"></div>
+      <div class="nav-item" onclick="clearAll()">
+        <span class="nav-icon">🗑️</span> Limpiar mapa
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ STATS ══ -->
+<div id="stats-overlay" class="overlay-panel">
+  <button class="back-btn" onclick="showMap()">← Volver</button>
+  <div class="stats-title">📊 Estadísticas</div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total</div>
+      <div class="stat-value" id="st-total">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Sin revisar</div>
+      <div class="stat-value red" id="st-new">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Guardados ✓</div>
+      <div class="stat-value green" id="st-green">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Descartados</div>
+      <div class="stat-value grey" id="st-grey">0</div>
+    </div>
+  </div>
+  <div class="stat-bar-wrap">
+    <div class="stat-bar-label">Progreso de revisión</div>
+    <div class="stat-bar-track">
+      <div class="stat-bar-fill" id="st-bar" style="background:var(--blue);width:0%"></div>
+    </div>
+    <div class="stat-bar-pct" id="st-pct">0% revisado</div>
+  </div>
+  <div class="save-load-row">
+    <button class="sl-btn primary" onclick="exportExcel();closeDrawer();">
+      <span class="sl-ico">📤</span>Exportar Excel
+    </button>
+  </div>
+</div>
+
+<!-- ══ DISTRICTS ══ -->
+<div id="districts-overlay" class="overlay-panel">
+  <button class="back-btn" onclick="showMap()">← Volver</button>
+  <div class="stats-title">📁 Mis distritos</div>
+  <div id="districts-list"></div>
+</div>
+
+<!-- ══ PANEL ══ -->
+<div id="panel">
+  <div class="p-handle" onclick="closePanel()"></div>
+  <div id="panel-body">
+    <div class="p-loading">Cargando…</div>
+  </div>
+</div>
+
+<!-- ══ LOADING ══ -->
+<div id="loading">
+  <div class="spin"></div>
+  <div id="load-msg">Buscando…</div>
+  <div id="load-sub"></div>
+</div>
+
+<input type="file" id="import-in" accept=".xlsx,.xls" onchange="importExcel(this)" style="display:none">
+
+<script>
+// ═══════════════════════════════════════
+// ALL SMALL BUSINESS TYPES (Places API)
+// ═══════════════════════════════════════
+// 7 focused groups — all confirmed supported by Places API (New).
+// Dropped: bank, gas_station, car_dealer, hotel, motel, hostel, post_office,
+//          storage, courier_service, moving_company, university (chains/non-targets).
+const TYPE_GROUPS = [
+  // 1 · Restauración
+  ['restaurant','cafe','bakery','meal_takeaway',
+   'food_store','sandwich_shop','coffee_shop','tea_house',
+   'ice_cream_shop','dessert_shop','meal_delivery'],
+
+  // 2 · Copas & ocio nocturno
+  ['bar','wine_bar','cocktail_bar','sports_bar','night_club'],
+
+  // 3 · Belleza & bienestar
+  ['hair_salon','beauty_salon','barber_shop','nail_salon',
+   'spa','massage','yoga_studio','gym','cosmetics_store'],
+
+  // 4 · Salud
+  ['doctor','physiotherapist','dentist','pharmacy','veterinary_care'],
+
+  // 5 · Moda, regalo & comercio especializado
+  ['clothing_store','shoe_store','jewelry_store','tailor',
+   'florist','pet_store','bicycle_store',
+   'toy_store','gift_shop','sporting_goods_store'],
+
+  // 6 · Hogar, vehículos & reparaciones
+  ['electronics_store','hardware_store','furniture_store','home_goods_store',
+   'book_store','car_repair','car_wash','laundry',
+   'locksmith','electrician','plumber','painter','roofing_contractor'],
+
+  // 7 · Servicios profesionales & educación
+  ['real_estate_agency','travel_agency','accounting','lawyer',
+   'insurance_agency','art_gallery',
+   'school','primary_school','secondary_school','preschool',
+   'child_care_agency'],
+];
+
+const MIN_REVIEWS = 5;
+
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let apiKey = 'AIzaSyCsTD8ltGlOFn3ZvJGLVM1jhTqErFLZ7a0';
+let map = null, gpsMarker = null, boundaryLayer = null;
+let prospects = {}, leafMarkers = {};
+let activeId = null;
+let currentDistrict = null;
+let archive = {};
+let filterNoWebOnly = false; // when true, hides businesses with real websites
+
+// ═══════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════
+(function init() {
+  try { archive = JSON.parse(localStorage.getItem('ps_archive') || '{}'); } catch(e) { archive={}; }
+  startApp();
+})();
+
+function saveKey() {
+  const k = document.getElementById('key-in').value.trim();
+  if (!k.startsWith('AIza')) { alert('API key inválida — debe empezar por AIza…'); return; }
+  apiKey = k; localStorage.setItem('ps_key', k); startApp();
+}
+function changeKey() {
+  closeDrawer(); localStorage.removeItem('ps_key'); apiKey='';
+  document.getElementById('app').style.display='none';
+  document.getElementById('setup').style.display='flex';
+  document.getElementById('key-in').value='';
+}
+
+function startApp() {
+  document.getElementById('app').style.display='flex';
+  if (!map) initMap();
+}
+
+// ═══════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════
+function initMap() {
+  map = L.map('map',{zoomControl:false,attributionControl:false}).setView([41.39,2.15],13);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+  L.control.attribution({prefix:false,position:'bottomright'})
+    .addAttribution('© <a href="https://carto.com">CARTO</a>').addTo(map);
+  map.on('click', closePanel);
+  map.on('zoomend', updateLabelVisibility);
+  updateLabelVisibility();
+  startGPS();
+}
+
+function updateLabelVisibility() {
+  document.getElementById('map').classList.toggle('labels-hidden', map.getZoom() < 15);
+}
+
+function startGPS() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(pos=>{
+    const ll=[pos.coords.latitude,pos.coords.longitude];
+    const html='<div class="gps-outer"><div class="gps-ring"></div><div class="gps-core"></div></div>';
+    if (!gpsMarker) {
+      gpsMarker=L.marker(ll,{icon:L.divIcon({className:'',html,iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:3000}).addTo(map);
+    } else { gpsMarker.setLatLng(ll); }
+  },null,{enableHighAccuracy:true,maximumAge:15000,timeout:30000});
+}
+
+// ═══════════════════════════════════════
+// FETCH HELPER (works on all iOS versions)
+// ═══════════════════════════════════════
+function timedFetch(url, options, ms=20000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal })
+    .finally(() => clearTimeout(timer));
+}
+
+// ═══════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  closePanel();
+
+  try {
+    showLoad('Geocodificando zona…','');
+
+    // 1. Geocode (no User-Agent — forbidden browser header)
+    const geoRes = await timedFetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8`,
+      { headers: { 'Accept-Language': 'es' } }
+    );
+    if (!geoRes.ok) throw new Error('Nominatim error ' + geoRes.status);
+    const geos = await geoRes.json();
+    if (!geos.length) throw new Error('Zona no encontrada. Prueba añadir la ciudad, ej: "Gràcia, Barcelona"');
+    const pref=['administrative','suburb','quarter','neighbourhood','city','town','village','municipality'];
+    const geo = geos.find(g=>pref.includes(g.type)) || geos[0];
+
+    // 2. Bounding box from Nominatim (always available — used as grid fallback)
+    const bb = geo.boundingbox; // [south, north, west, east]
+    const nominatimBounds = L.latLngBounds(
+      [parseFloat(bb[0]), parseFloat(bb[2])],
+      [parseFloat(bb[1]), parseFloat(bb[3])]
+    );
+
+    // 3. Boundary polygon via Overpass
+    showLoad('Cargando límites del área…','(puede tardar unos segundos)');
+    const boundary = await fetchBoundary(geo.osm_type, geo.osm_id);
+    if (boundaryLayer) { map.removeLayer(boundaryLayer); boundaryLayer=null; }
+
+    let cells;
+    if (boundary) {
+      boundaryLayer = L.geoJSON(boundary,{
+        style:{color:'#1a73e8',weight:2.5,fillColor:'#1a73e8',fillOpacity:0.06,dashArray:'5,5'}
+      }).addTo(map);
+      map.fitBounds(boundaryLayer.getBounds(),{padding:[28,28],maxZoom:16});
+      cells = buildGrid(boundaryLayer.getBounds().pad(0.15));
+    } else {
+      // No polygon — use Nominatim bbox to build a proper grid (never single-cell fallback)
+      boundaryLayer = L.rectangle(nominatimBounds,{
+        color:'#1a73e8',weight:2,fillColor:'#1a73e8',fillOpacity:0.04,dashArray:'6,5'
+      }).addTo(map);
+      map.fitBounds(nominatimBounds,{padding:[28,28],maxZoom:16});
+      cells = buildGrid(nominatimBounds.pad(0.15));
+    }
+
+    // 3. Clear previous district (save it first)
+    saveToArchive();
+    Object.values(leafMarkers).forEach(m=>map.removeLayer(m));
+    leafMarkers={}; prospects={};
+    currentDistrict = q.toLowerCase().trim();
+
+    // 4. Grid × type-group search
+    const total = cells.length * TYPE_GROUPS.length;
+    let done=0, newCount=0, apiErr='';
+    const seen = new Set();
+
+    showLoad(`Consultando Google Places…`,`0 / ${total} búsquedas`);
+
+    for (const cell of cells) {
+      for (const types of TYPE_GROUPS) {
+        try {
+          const places = await nearbyAll(cell.lat, cell.lon, cell.radius, types);
+          places.forEach(p=>{
+            if (seen.has(p.id)) return;
+            seen.add(p.id);
+            prospects[p.id]={...p, status:'new', details:null};
+            placeMarker(prospects[p.id]);
+            newCount++;
+          });
+        } catch(e){
+          apiErr = e.message;
+          console.warn('Search error', e.message);
+          if (e.message.includes('API Key') || e.message.includes('403') || e.message.includes('401')) {
+            hideLoad(); setStatus('❌ ' + e.message, 'err'); return;
+          }
+        }
+        done++;
+        showLoad(`Buscando negocios… (aparecen en el mapa)`,`${done} / ${total} búsquedas · ${newCount} encontrados`);
+      }
+    }
+
+    hideLoad();
+    if (newCount === 0 && apiErr) {
+      setStatus('Error Places API: ' + apiErr, 'err');
+    } else {
+      const total = Object.keys(prospects).length;
+      const noWeb = Object.values(prospects).filter(p=>!p.websiteUri||isProspect(p.websiteUri)).length;
+      saveToArchive();
+      setStatus(`${total} negocios · ${noWeb} sin web propia`, 'ok');
+    }
+
+  } catch(err) {
+    hideLoad();
+    setStatus('❌ ' + err.message, 'err');
+    console.error(err);
+  }
+}
+
+// Dynamic grid — targets ~420m radius cells so popular spots don't crowd out others.
+// Auto-sizes rows/cols to the district, capped at 7×7 = 49 cells max.
+const TARGET_CELL_RADIUS = 420; // metres
+
+function buildGrid(bounds) {
+  const sw=bounds.getSouthWest(), ne=bounds.getNorthEast();
+  const wM=haversineM(sw.lat,sw.lng,sw.lat,ne.lng);
+  const hM=haversineM(sw.lat,sw.lng,ne.lat,sw.lng);
+  const step = TARGET_CELL_RADIUS * 1.6; // ~30% overlap between adjacent cells
+  const cols = Math.max(2, Math.min(7, Math.round(wM/step)));
+  const rows = Math.max(2, Math.min(7, Math.round(hM/step)));
+  const dLat=(ne.lat-sw.lat)/rows, dLon=(ne.lng-sw.lng)/cols;
+  const cells=[];
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    cells.push({
+      lat: sw.lat+(r+.5)*dLat,
+      lon: sw.lng+(c+.5)*dLon,
+      radius: TARGET_CELL_RADIUS,
+    });
+  }
+  console.log(`Grid: ${rows}×${cols} = ${cells.length} cells, radius ${TARGET_CELL_RADIUS}m`);
+  return cells;
+}
+
+// ═══════════════════════════════════════
+// BOUNDARY
+// ═══════════════════════════════════════
+async function fetchBoundary(osmType,osmId) {
+  const t={node:'node',way:'way',relation:'relation'}[osmType]||'relation';
+  const q=`[out:json][timeout:25];${t}(${osmId});out geom;`;
+  for(const ep of['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){
+    try{
+      const r=await timedFetch(ep,{method:'POST',body:'data='+encodeURIComponent(q)},18000);
+      if(!r.ok) continue;
+      const d=await r.json();
+      if(!d.elements?.length) return null;
+      const el=d.elements[0];
+      if(el.type==='relation') return relToGeoJSON(el);
+      if(el.type==='way') return{type:'Feature',geometry:{type:'Polygon',coordinates:[el.geometry.map(p=>[p.lon,p.lat])]}};
+      return null;
+    }catch(e){continue;}
+  }
+  return null;
+}
+
+function relToGeoJSON(rel){
+  const outer=(rel.members||[]).filter(m=>m.type==='way'&&(m.role==='outer'||m.role==='')).map(m=>(m.geometry||[]).map(p=>[p.lon,p.lat]));
+  const inner=(rel.members||[]).filter(m=>m.type==='way'&&m.role==='inner').map(m=>(m.geometry||[]).map(p=>[p.lon,p.lat]));
+  const or=assemble(outer), ir=assemble(inner);
+  if(!or.length) return null;
+  return or.length===1
+    ?{type:'Feature',geometry:{type:'Polygon',coordinates:[or[0],...ir]}}
+    :{type:'Feature',geometry:{type:'MultiPolygon',coordinates:or.map(r=>[r])}};
+}
+
+function assemble(ways){
+  const rem=ways.map(w=>[...w]), rings=[], key=p=>p[0].toFixed(6)+','+p[1].toFixed(6);
+  while(rem.length){
+    const ring=[...rem.shift()]; let changed=true;
+    while(changed){
+      changed=false; if(key(ring[0])===key(ring[ring.length-1])) break;
+      for(let i=rem.length-1;i>=0;i--){
+        const w=rem[i]; if(!w.length) continue;
+        const re=ring[ring.length-1],rs=ring[0];
+        if(key(re)===key(w[0])){ring.push(...w.slice(1));rem.splice(i,1);changed=true;}
+        else if(key(re)===key(w[w.length-1])){ring.push(...[...w].reverse().slice(1));rem.splice(i,1);changed=true;}
+        else if(key(rs)===key(w[w.length-1])){ring.unshift(...w.slice(0,-1));rem.splice(i,1);changed=true;}
+        else if(key(rs)===key(w[0])){ring.unshift(...[...w].reverse().slice(0,-1));rem.splice(i,1);changed=true;}
+      }
+    }
+    if(ring.length>3) rings.push(ring);
+  }
+  return rings;
+}
+
+// ═══════════════════════════════════════
+// PLACES API (NEW) — ALL TYPES AT ONCE
+// ═══════════════════════════════════════
+async function nearbyAll(lat,lon,radius,types) {
+  const body={
+    includedTypes: types,
+    maxResultCount: 20,
+    rankPreference: 'POPULARITY',
+    languageCode: 'es',
+    locationRestriction:{circle:{center:{latitude:lat,longitude:lon},radius:Math.round(radius)}}
+  };
+  const r=await timedFetch('https://places.googleapis.com/v1/places:searchNearby',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'X-Goog-Api-Key':apiKey,
+      'X-Goog-FieldMask':'places.id,places.displayName,places.rating,places.userRatingCount,places.location,places.primaryTypeDisplayName,places.types,places.websiteUri'
+    },
+    body:JSON.stringify(body)
+  }, 25000);
+  if(r.status===403||r.status===401){
+    const e=await r.json().catch(()=>({}));
+    throw new Error('API Key inválida o sin permisos — verifica que "Places API (New)" esté activada. Detalle: '+(e.error?.message||r.status));
+  }
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||'Places error '+r.status);}
+  const d=await r.json();
+  return (d.places||[])
+    .filter(p=>(p.userRatingCount||0)>=MIN_REVIEWS)
+    .map(p=>({
+      id:p.id,
+      name:p.displayName?.text||'(sin nombre)',
+      rating:p.rating??null,
+      reviews:p.userRatingCount??0,
+      lat:p.location?.latitude,
+      lon:p.location?.longitude,
+      typeDisplay:p.primaryTypeDisplayName?.text||'',
+      websiteUri:p.websiteUri||null,
+    }));
+}
+
+// Only show businesses with no website or only social/booking platforms
+// (these are NOT a real website — still a valid prospect)
+const NO_WEBSITE_DOMAINS = [
+  'instagram.com','facebook.com','fb.com',
+  'treatwell.com','wahanda.com',
+  'fresha.com',
+  'booksy.com',
+  'vagaro.com',
+  'glofox.com',
+  'mindbodyonline.com','mindbody.io',
+  'yelp.com','tripadvisor.com','tripadvisor.es',
+  'google.com/maps','maps.google.com',
+  'foursquare.com',
+];
+function isProspect(websiteUri) {
+  if (!websiteUri) return true;
+  const u = websiteUri.toLowerCase();
+  return NO_WEBSITE_DOMAINS.some(d => u.includes(d));
+}
+
+async function fetchDetails(id){
+  const r=await timedFetch(`https://places.googleapis.com/v1/places/${id}`,{
+    headers:{
+      'X-Goog-Api-Key':apiKey,
+      'X-Goog-FieldMask':'id,displayName,rating,userRatingCount,formattedAddress,nationalPhoneNumber,websiteUri,googleMapsUri,currentOpeningHours'
+    }
+  }, 15000);
+  if(!r.ok) throw new Error('Details '+r.status);
+  return r.json();
+}
+
+// ═══════════════════════════════════════
+// MARKERS
+// ═══════════════════════════════════════
+// Red = no website · Yellow = social/booking link only · Green = saved · Grey = discarded
+function dotColor(p){
+  if(p.status==='success') return '#43A047';
+  if(p.status==='discarded') return '#9E9E9E';
+  return p.websiteUri ? '#FFC107' : '#E53935';
+}
+
+function placeMarker(p){
+  if(leafMarkers[p.id]) map.removeLayer(leafMarkers[p.id]);
+  if(!p.lat||!p.lon) return;
+  // In filter mode, skip businesses with real websites
+  if(filterNoWebOnly && p.websiteUri && !isProspect(p.websiteUri)) return;
+  const color=dotColor(p);
+  const ratingTxt=p.rating!=null?` ${p.rating} (${fmt(p.reviews)})`:'';
+  const label=esc((p.typeDisplay||'Negocio')+ratingTxt);
+  const html=`<div class="pm"><div class="pm-dot" style="background:${color}"></div><div class="pm-lbl">${label}</div></div>`;
+  const icon=L.divIcon({className:'',html,iconSize:[1,1],iconAnchor:[0,0]});
+  const m=L.marker([p.lat,p.lon],{icon,zIndexOffset:100}).addTo(map);
+  m.on('click',e=>{L.DomEvent.stopPropagation(e);openPanel(p.id);});
+  leafMarkers[p.id]=m;
+}
+function refreshMarker(id){if(prospects[id])placeMarker(prospects[id]);}
+
+function toggleFilter(){
+  filterNoWebOnly=!filterNoWebOnly;
+  const btn=document.getElementById('filter-btn');
+  btn.classList.toggle('active',filterNoWebOnly);
+  btn.textContent=filterNoWebOnly?'🔴 Solo sin web · ON':'🔴 Solo sin web';
+  applyFilter();
+}
+
+function applyFilter(){
+  // Remove all markers then redraw respecting current filter
+  Object.values(leafMarkers).forEach(m=>map.removeLayer(m));
+  leafMarkers={};
+  Object.values(prospects).forEach(p=>placeMarker(p));
+  const visible=Object.values(leafMarkers).length;
+  const total=Object.keys(prospects).length;
+  setStatus(filterNoWebOnly?`${visible} sin web (de ${total} total)`:`${total} negocios`,'ok');
+}
+
+// ═══════════════════════════════════════
+// PANEL
+// ═══════════════════════════════════════
+async function openPanel(id){
+  activeId=id;
+  const p=prospects[id]; if(!p) return;
+  renderBasic(p);
+  document.getElementById('panel').classList.add('open');
+  if(!p.details){
+    try{p.details=await fetchDetails(id);prospects[id]=p;}
+    catch(e){console.warn('Details fail',e);}
+  }
+  if(activeId===id) renderFull(p);
+}
+function closePanel(){document.getElementById('panel').classList.remove('open');activeId=null;}
+
+function renderBasic(p){
+  document.getElementById('panel-body').innerHTML=`
+    <div class="p-header">
+      <div class="p-name">${esc(p.name)}</div>
+      <div class="p-status-dot" style="background:${dotColor(p)}"></div>
+    </div>
+    <div class="p-type">${esc(p.typeDisplay||'')}</div>
+    ${rHtml(p)}
+    <div class="p-loading">Cargando detalles…</div>
+    <div class="p-divider"></div>
+    ${btnsHtml(p)}
+  `;
+}
+
+function renderFull(p){
+  const d=p.details||{};
+  const addr=d.formattedAddress||'';
+  const phone=d.nationalPhoneNumber||'';
+  const web=d.websiteUri||'';
+  const mapsUrl=d.googleMapsUri||`https://maps.google.com/?q=${encodeURIComponent(p.name)}`;
+  const isOpen=d.currentOpeningHours?.openNow;
+  const openTxt=isOpen===true?'<span style="color:#43A047;font-weight:600"> · Abierto</span>':isOpen===false?'<span style="color:#E53935;font-weight:600"> · Cerrado</span>':'';
+  document.getElementById('panel-body').innerHTML=`
+    <div class="p-header">
+      <div class="p-name">${esc(p.name)}</div>
+      <div class="p-status-dot" style="background:${dotColor(p)}"></div>
+    </div>
+    <div class="p-type">${esc(p.typeDisplay||'')}${openTxt}</div>
+    ${rHtml(p)}
+    ${addr?`<div class="p-info-row"><span class="p-info-ico">📍</span>${esc(addr)}</div>`:''}
+    ${phone?`<div class="p-info-row"><span class="p-info-ico">📞</span><a href="tel:${phone}">${phone}</a></div>`:''}
+    <div class="p-info-row"><span class="p-info-ico">🌐</span>${web
+      ?`<a href="${web}" target="_blank">${esc(web.replace(/^https?:\/\/(www\.)?/,'').slice(0,48))}</a>`
+      :'<span class="no-web">Sin página web</span>'}</div>
+    <div class="p-divider"></div>
+    <a href="${mapsUrl}" target="_blank" class="gmaps-btn">📍 Abrir en Google Maps</a>
+    ${btnsHtml(p)}
+  `;
+}
+
+function rHtml(p){
+  if(p.rating==null) return '<div style="color:#ccc;font-size:13px;margin-bottom:12px">Sin valoraciones</div>';
+  return `<div class="p-rating">
+    <span class="p-stars">${stars(p.rating)}</span>
+    <span class="p-rnum">${p.rating}</span>
+    <span class="p-rcount">(${fmt(p.reviews)} reseñas)</span>
+  </div>`;
+}
+
+function btnsHtml(p){
+  const s=p.status||'new';
+  const webBadge=p.websiteUri
+    ?`<div style="font-size:11px;color:#E65100;background:#FFF3E0;border-radius:6px;padding:3px 8px;margin-bottom:10px;display:inline-block">🔗 Solo red social / reservas</div>`
+    :`<div style="font-size:11px;color:#B71C1C;background:#FFEBEE;border-radius:6px;padding:3px 8px;margin-bottom:10px;display:inline-block">🚫 Sin página web</div>`;
+  return webBadge+`<div class="action-row">
+    <button class="a-btn green ${s==='success'?'active':''}" onclick="setProspectStatus('${p.id}','success')">
+      <span class="a-ico">✅</span>Guardar prospecto
+    </button>
+    <button class="a-btn grey ${s==='discarded'?'active':''}" onclick="setProspectStatus('${p.id}','discarded')">
+      <span class="a-ico">✕</span>Descartar
+    </button>
+  </div>`;
+}
+
+function setProspectStatus(id,status){
+  if(!prospects[id]) return;
+  if(prospects[id].status===status) status='new';
+  prospects[id].status=status;
+  refreshMarker(id);
+  if(activeId===id) renderFull(prospects[id]);
+  saveToArchive(); // auto-save every status change
+}
+
+// ═══════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════
+function openDrawer(){document.getElementById('drawer-overlay').classList.add('open');}
+function closeDrawer(){document.getElementById('drawer-overlay').classList.remove('open');}
+
+function showMap(){
+  document.getElementById('stats-overlay').classList.remove('open');
+  document.getElementById('districts-overlay').classList.remove('open');
+  document.getElementById('nav-map').classList.add('active');
+  document.getElementById('nav-stats').classList.remove('active');
+  document.getElementById('nav-districts').classList.remove('active');
+  closeDrawer();
+  setTimeout(()=>{if(map)map.invalidateSize();},50);
+}
+
+function showStats(){
+  updateStats();
+  document.getElementById('stats-overlay').classList.add('open');
+  document.getElementById('districts-overlay').classList.remove('open');
+  document.getElementById('nav-stats').classList.add('active');
+  document.getElementById('nav-map').classList.remove('active');
+  document.getElementById('nav-districts').classList.remove('active');
+  closeDrawer();
+}
+
+function showDistricts(){
+  document.getElementById('stats-overlay').classList.remove('open');
+  document.getElementById('districts-overlay').classList.add('open');
+  document.getElementById('nav-districts').classList.add('active');
+  document.getElementById('nav-map').classList.remove('active');
+  document.getElementById('nav-stats').classList.remove('active');
+  closeDrawer();
+  renderDistricts();
+}
+
+function renderDistricts(){
+  const list=document.getElementById('districts-list');
+  const keys=Object.keys(archive);
+  if(!keys.length){
+    list.innerHTML='<div class="no-districts">No hay búsquedas guardadas.<br>Haz una búsqueda para guardarla aquí.</div>';
+    return;
+  }
+  list.innerHTML=keys.map(k=>{
+    const d=archive[k];
+    const total=Object.keys(d.prospects||{}).length;
+    const green=Object.values(d.prospects||{}).filter(p=>p.status==='success').length;
+    const grey=Object.values(d.prospects||{}).filter(p=>p.status==='discarded').length;
+    const isActive=k===currentDistrict;
+    const idx = keys.indexOf(k);
+    return `<div class="district-card ${isActive?'active-district':('')}">
+      <div class="dc-name">${esc(d.displayName||k)}</div>
+      <div class="dc-meta">${d.date} · ${total} prospectos · ✅ ${green} · ✕ ${grey}</div>
+      <div class="dc-actions">
+        <button class="dc-btn load" data-idx="${idx}" onclick="loadDistrict(Object.keys(archive)[this.dataset.idx])">Cargar</button>
+        <button class="dc-btn del" data-idx="${idx}" onclick="deleteDistrict(Object.keys(archive)[this.dataset.idx])">Eliminar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function loadDistrict(key){
+  const d=archive[key]; if(!d) return;
+  Object.values(leafMarkers).forEach(m=>map.removeLayer(m));
+  leafMarkers={}; prospects={};
+  if(boundaryLayer){map.removeLayer(boundaryLayer);boundaryLayer=null;}
+  prospects=JSON.parse(JSON.stringify(d.prospects||{}));
+  currentDistrict=key;
+  document.getElementById('search-input').value=d.displayName||key;
+  Object.values(prospects).forEach(p=>placeMarker(p));
+  const pts=Object.values(prospects).filter(p=>p.lat&&p.lon);
+  if(pts.length){
+    const ll=pts.map(p=>[p.lat,p.lon]);
+    map.fitBounds(L.latLngBounds(ll),{padding:[40,40],maxZoom:16});
+  }
+  showMap();
+  setStatus(`${Object.keys(prospects).length} prospectos cargados — ${esc(d.displayName||key)}`,'ok');
+}
+
+function deleteDistrict(key){
+  if(!confirm(`¿Eliminar "${archive[key]?.displayName||key}"?`)) return;
+  delete archive[key];
+  if(currentDistrict===key) currentDistrict=null;
+  try{localStorage.setItem('ps_archive',JSON.stringify(archive));}catch(e){}
+  renderDistricts();
+}
+
+function saveToArchive(){
+  if(!currentDistrict) return;
+  archive[currentDistrict]={
+    displayName:document.getElementById('search-input').value.trim()||currentDistrict,
+    date:new Date().toISOString().slice(0,10),
+    prospects:JSON.parse(JSON.stringify(prospects))
+  };
+  try{localStorage.setItem('ps_archive',JSON.stringify(archive));}catch(e){console.warn('Archive save failed',e);}
+}
+
+function updateStats(){
+  const all=Object.values(prospects);
+  const total=all.length;
+  const green=all.filter(p=>p.status==='success').length;
+  const grey=all.filter(p=>p.status==='discarded').length;
+  const newP=all.filter(p=>p.status==='new').length;
+  const reviewed=green+grey;
+  const pct=total?Math.round(reviewed/total*100):0;
+  document.getElementById('st-total').textContent=total;
+  document.getElementById('st-new').textContent=newP;
+  document.getElementById('st-green').textContent=green;
+  document.getElementById('st-grey').textContent=grey;
+  document.getElementById('st-bar').style.width=pct+'%';
+  document.getElementById('st-pct').textContent=pct+'% revisado';
+}
+
+// ═══════════════════════════════════════
+// SAVE / LOAD / EXPORT / IMPORT
+// ═══════════════════════════════════════
+function saveData(){
+  closeDrawer();
+  saveToArchive(); // persist status changes back into district archive
+  const out={};
+  Object.entries(prospects).forEach(([id,p])=>{
+    out[id]={
+      id,name:p.name,rating:p.rating,reviews:p.reviews,
+      lat:p.lat,lon:p.lon,typeDisplay:p.typeDisplay,status:p.status,
+      details:p.details?{
+        formattedAddress:p.details.formattedAddress,
+        nationalPhoneNumber:p.details.nationalPhoneNumber,
+        websiteUri:p.details.websiteUri,
+        googleMapsUri:p.details.googleMapsUri,
+      }:null
+    };
+  });
+  try{
+    localStorage.setItem('ps_data',JSON.stringify(out));
+    setStatus('Guardado ✓ — distrito y estados actualizados','ok');
+  }catch(e){setStatus('Error al guardar (localStorage lleno)','err');}
+}
+
+function exportExcel(){
+  closeDrawer();
+  const all=Object.values(prospects);
+  if(!all.length){setStatus('No hay datos para exportar','err');return;}
+
+  const SLABEL={new:'Sin revisar',success:'✅ Guardado',discarded:'✕ Descartado'};
+  const ORDER={success:0,discarded:1,new:2};
+  const sorted=[...all].sort((a,b)=>(ORDER[a.status]??2)-(ORDER[b.status]??2));
+
+  const rows=[['Estado','Nombre','Tipo','Valoración','Reseñas','Web / Red social','Dirección','Teléfono','Google Maps','Distrito','Lat','Lon']];
+  sorted.forEach(p=>{
+    const d=p.details||{};
+    const web=d.websiteUri||p.websiteUri||'';
+    const webLabel=!web?'Sin web':web.includes('instagram.com')?'Instagram':web.includes('facebook.com')||web.includes('fb.com')?'Facebook':web.includes('treatwell')||web.includes('fresha')||web.includes('booksy')?'Reservas ('+web.replace(/^https?:\/\/(www\.)?/,'').split('/')[0]+')':web.replace(/^https?:\/\/(www\.)?/,'').slice(0,40);
+    rows.push([
+      SLABEL[p.status]||'Sin revisar',
+      p.name,
+      p.typeDisplay||'',
+      p.rating??'',
+      p.reviews??'',
+      webLabel,
+      d.formattedAddress||'',
+      d.nationalPhoneNumber||'',
+      d.googleMapsUri||`https://maps.google.com/?q=${encodeURIComponent(p.name)}`,
+      currentDistrict||'',
+      p.lat||'',
+      p.lon||''
+    ]);
+  });
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[14,26,16,10,10,30,36,14,44,16,12,12].map(w=>({wch:w}));
+
+  // Color header row
+  const hdr=rows[0];
+  hdr.forEach((_,c)=>{
+    const ref=XLSX.utils.encode_cell({r:0,c});
+    if(!ws[ref]) return;
+    ws[ref].s={fill:{fgColor:{rgb:'1a73e8'}},font:{bold:true,color:{rgb:'FFFFFF'}}};
+  });
+
+  XLSX.utils.book_append_sheet(wb,ws,'Prospects');
+  const district=(currentDistrict||'export').replace(/[^a-z0-9]/gi,'_');
+  XLSX.writeFile(wb,`scout_${district}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  setStatus(`Excel exportado ✓ — ${sorted.filter(p=>p.status==='success').length} guardados, ${sorted.filter(p=>p.status==='discarded').length} descartados`,'ok');
+}
+
+function importExcel(input){
+  closeDrawer();
+  const file=input.files[0]; if(!file) return;
+  const SMAP={'Sin revisar':'new','Guardado':'success','Descartado':'discarded'};
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+      let n=0;
+      rows.slice(1).forEach(r=>{
+        const[name,type,rating,reviews,addr,,web,mapsUrl,statusLabel,lat,lon]=r;
+        const status=SMAP[statusLabel]||'new';
+        const match=Object.values(prospects).find(p=>p.name===name);
+        if(match){
+          match.status=status;
+          if(addr||web||mapsUrl){match.details=match.details||{};if(addr)match.details.formattedAddress=addr;if(web)match.details.websiteUri=web;if(mapsUrl)match.details.googleMapsUri=mapsUrl;}
+          prospects[match.id]=match; refreshMarker(match.id); n++;
+        } else if(name&&lat&&lon){
+          const id='imp_'+Math.random().toString(36).slice(2,10);
+          prospects[id]={id,name,typeDisplay:type||'',rating:parseFloat(rating)||null,reviews:parseInt(reviews)||0,lat:parseFloat(lat),lon:parseFloat(lon),status,details:{formattedAddress:addr,websiteUri:web,googleMapsUri:mapsUrl}};
+          placeMarker(prospects[id]); n++;
+        }
+      });
+      setStatus(`${n} prospectos cargados ✓`,'ok');
+    }catch(err){setStatus('Error al importar: '+err.message,'err');}
+    input.value='';
+  };
+  reader.readAsBinaryString(file);
+}
+
+function clearAll(){
+  if(!confirm('¿Eliminar todos los prospectos del mapa?')) return;
+  closeDrawer();
+  Object.values(leafMarkers).forEach(m=>map.removeLayer(m));
+  leafMarkers={}; prospects={};
+  if(boundaryLayer){map.removeLayer(boundaryLayer);boundaryLayer=null;}
+  localStorage.removeItem('ps_data');
+  setStatus('Mapa limpiado');
+}
+
+// ═══════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════
+function showLoad(msg,sub){
+  document.getElementById('load-msg').textContent=msg;
+  document.getElementById('load-sub').textContent=sub||'';
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoad(){document.getElementById('loading').classList.remove('show');}
+function setStatus(msg,type){
+  const el=document.getElementById('statusline');
+  el.textContent=msg; el.className=type||'';
+}
+function fmt(n){return(n||0).toLocaleString('es-ES');}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function stars(r){
+  r=Math.round(r*2)/2;
+  return'★'.repeat(Math.floor(r))+(r%1?'½':'')+'☆'.repeat(5-Math.ceil(r));
+}
+function haversineM(la1,lo1,la2,lo2){
+  const R=6371000,dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+</script>
+</body>
+</html>
